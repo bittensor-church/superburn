@@ -6,12 +6,13 @@ solc = "0.8.20"
 optimizer = true
 optimizer_runs = 200
 via_ir = false
+evm_version = "london"
 
 # Test configuration
 gas_reports = ["Sink"]
 fuzz = { runs = 256 }
 
-# Formatting
+[fmt]
 line_length = 120
 tab_width = 4
 bracket_spacing = false
