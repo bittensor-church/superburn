@@ -22,6 +22,9 @@ contract Sink {
     /// @notice Address of the unstake precompile on Bittensor
     address private constant UNSTAKE_PRECOMPILE = 0x0000000000000000000000000000000000000801;
 
+    /// @notice Address of the neuron (burned register) precompile on Bittensor
+    address private constant NEURON_PRECOMPILE = 0x0000000000000000000000000000000000000804;
+
     /// @notice Gas buffer for reimbursement calculation (calibrated through testing)
     /// @dev Covers: unstake call (~30k) + reimbursement transfer (~30k) + burn to address(0) (~21k) + event (~5k) + safety margin
     uint256 private constant REIMBURSEMENT_BUFFER = 90000;
@@ -42,6 +45,13 @@ contract Sink {
         uint256 timestamp
     );
 
+    /// @notice Emitted when contract registers a neuron through the precompile
+    /// @param netuid Subnet identifier
+    /// @param hotkey Hotkey used for registration
+    /// @param amountBurned Amount of TAO sent (burned) during registration
+    /// @param caller Address that initiated the registration
+    event Registered(uint16 indexed netuid, bytes32 hotkey, uint256 amountBurned, address indexed caller);
+
     // ============ Errors ============
 
     /// @dev Thrown when contract balance is insufficient to cover gas reimbursement
@@ -55,6 +65,9 @@ contract Sink {
 
     /// @dev Thrown when burn to address(0) fails
     error BurnFailed();
+
+    /// @dev Thrown when burnedRegister call fails
+    error BurnedRegisterFailed();
 
     // ============ Public Functions ============
 
@@ -143,5 +156,29 @@ contract Sink {
         // This is a rough estimate and may vary based on network conditions
         uint256 estimatedGasUsage = 5000 + REIMBURSEMENT_BUFFER;
         return estimatedGasUsage * tx.gasprice;
+    }
+
+    /**
+     * @notice Registers a neuron via the burnedRegister precompile.
+     * @dev Forwards msg.value to the precompile so the required TAO burn is covered.
+     * @param netuid Subnet identifier to register within
+     * @param hotkey 32-byte hotkey used for neuron identity
+     * @return success True when the precompile call succeeds
+     */
+    function registerNeuron(uint16 netuid, bytes32 hotkey) external payable returns (bool success) {
+        (bool callSuccess, bytes memory returnData) = NEURON_PRECOMPILE.call{value: msg.value}(
+            abi.encodeWithSignature("burnedRegister(uint16,bytes32)", netuid, hotkey)
+        );
+        if (!callSuccess) {
+            if (returnData.length > 0) {
+                assembly {
+                    revert(add(returnData, 0x20), mload(returnData))
+                }
+            }
+            revert BurnedRegisterFailed();
+        }
+
+        emit Registered(netuid, hotkey, msg.value, msg.sender);
+        return true;
     }
 }

@@ -24,6 +24,7 @@ The Sink contract provides a simple, trustless mechanism to burn staked TAO toke
 - **Stateless**: No state variables (except constants)
 - **No receive() function**: Tokens must be force-sent (prevents accidental deposits)
 - **Event Logging**: Track all unstakes and burns with detailed events
+- **Neuron Registration Helper**: `registerNeuron` forwards `burnedRegister` calls (and funds) to the neuron precompile so the contract can self-register as a miner
 
 ## Contract Architecture
 
@@ -31,6 +32,7 @@ The Sink contract provides a simple, trustless mechanism to burn staked TAO toke
 contract Sink {
     // Constants
     address private constant UNSTAKE_PRECOMPILE = 0x0000000000000000000000000000000000000801;
+    address private constant NEURON_PRECOMPILE = 0x0000000000000000000000000000000000000804;
     uint256 private constant REIMBURSEMENT_BUFFER = 90000; // Gas units
 
     // Single public function
@@ -39,6 +41,9 @@ contract Sink {
     // View functions
     function getBalance() external view returns (uint256); // Returns staked balance
     function estimateReimbursement() external view returns (uint256);
+
+    // Miner registration helper
+    function registerNeuron(uint16 netuid, bytes32 hotkey) external payable returns (bool);
 }
 ```
 
@@ -87,7 +92,7 @@ forge test --gas-report
 
 ## Testing
 
-The project includes **22 comprehensive tests** covering:
+The project includes **23 comprehensive tests** covering:
 
 - ✅ Unstaking functionality
 - ✅ Burning functionality

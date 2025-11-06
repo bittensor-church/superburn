@@ -37,6 +37,30 @@ contract MockUnstakePrecompile {
 }
 
 /**
+ * @title Mock Neuron Precompile
+ * @notice Simulates the neuron precompile burnedRegister for testing
+ */
+contract MockNeuronPrecompile {
+    uint16 public lastNetuid;
+    bytes32 public lastHotkey;
+    uint256 public lastValue;
+    bool public shouldFail;
+
+    function setShouldFail(bool value) external {
+        shouldFail = value;
+    }
+
+    function burnedRegister(uint16 netuid, bytes32 hotkey) external payable {
+        if (shouldFail) {
+            revert("register failed");
+        }
+        lastNetuid = netuid;
+        lastHotkey = hotkey;
+        lastValue = msg.value;
+    }
+}
+
+/**
  * @title Helper contract to test forced sends
  */
 contract ForceSender {
@@ -58,8 +82,11 @@ contract SinkTest is Test {
     Sink public sink;
     MockUnstakePrecompile public unstakePrecompile;
     MockUnstakePrecompile public unstakePrecompileAtAddr; // Reference to the etched precompile
+    MockNeuronPrecompile public neuronPrecompile;
+    MockNeuronPrecompile public neuronPrecompileAtAddr; // Reference to the etched neuron precompile
 
     address constant UNSTAKE_PRECOMPILE_ADDR = 0x0000000000000000000000000000000000000801;
+    address constant NEURON_PRECOMPILE_ADDR = 0x0000000000000000000000000000000000000804;
     address public user1;
     address public user2;
 
@@ -71,6 +98,8 @@ contract SinkTest is Test {
         uint256 timestamp
     );
 
+    event Registered(uint16 indexed netuid, bytes32 hotkey, uint256 amountBurned, address indexed caller);
+
     function setUp() public {
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
@@ -81,6 +110,12 @@ contract SinkTest is Test {
 
         // Create reference to the etched unstake precompile
         unstakePrecompileAtAddr = MockUnstakePrecompile(UNSTAKE_PRECOMPILE_ADDR);
+
+        // Deploy mock neuron precompile at expected address
+        neuronPrecompile = new MockNeuronPrecompile();
+        vm.etch(NEURON_PRECOMPILE_ADDR, address(neuronPrecompile).code);
+
+        neuronPrecompileAtAddr = MockNeuronPrecompile(NEURON_PRECOMPILE_ADDR);
 
         // Deploy Sink contract
         sink = new Sink();
@@ -382,6 +417,34 @@ contract SinkTest is Test {
 
         // Majority should be burned
         assertGt(amountBurned, initialAmount * 99 / 100, "Most should be burned");
+    }
+
+    // ============ Neuron Registration Tests ============
+
+    function test_RegisterNeuron_Success() public {
+        bytes32 hotkey = bytes32(uint256(uint160(user1)));
+        uint16 netuid = 42;
+        uint256 burnAmount = 1 ether;
+
+        vm.expectEmit(true, false, true, true);
+        emit Registered(netuid, hotkey, burnAmount, user1);
+
+        vm.prank(user1);
+        bool success = sink.registerNeuron{value: burnAmount}(netuid, hotkey);
+
+        assertTrue(success, "registerNeuron should return true");
+        assertEq(neuronPrecompileAtAddr.lastNetuid(), netuid, "Netuid forwarded");
+        assertEq(neuronPrecompileAtAddr.lastHotkey(), hotkey, "Hotkey forwarded");
+        assertEq(neuronPrecompileAtAddr.lastValue(), burnAmount, "Value forwarded");
+    }
+
+    function test_RegisterNeuron_RevertsOnFailure() public {
+        bytes32 hotkey = bytes32(uint256(uint160(user1)));
+        neuronPrecompileAtAddr.setShouldFail(true);
+
+        vm.prank(user1);
+        vm.expectRevert(bytes("register failed"));
+        sink.registerNeuron{value: 1 ether}(77, hotkey);
     }
 
     // ============ Edge Case Tests ============
