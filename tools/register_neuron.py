@@ -12,6 +12,7 @@ import os
 import pathlib
 import re
 import sys
+
 try:
     from web3 import Web3
     from web3.exceptions import ContractLogicError
@@ -103,6 +104,7 @@ def decode_ss58_hotkey(ss58: str) -> bytes:
         raise SystemExit("Invalid SS58 checksum")
     if len(pubkey) != 32:
         raise SystemExit(f"Expected 32-byte hotkey, got {len(pubkey)} bytes")
+    print(f"SS58 hotkey decoded to bytes32: 0x{pubkey.hex()}")
     return pubkey
 
 
@@ -148,7 +150,7 @@ def resolve_value_wei(args: argparse.Namespace, w3: Web3) -> int:
     if args.value_wei is not None:
         return args.value_wei
     assert args.value_tao is not None
-    return int(w3.to_wei(args.value_tao, "ether"))
+    return int(args.value_tao * 1_000_000_000)
 
 def build_and_send_transaction(
     w3: Web3,
