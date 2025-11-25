@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "../src/UnstakeV2Test.sol";
 import {ProperSink} from "../src/ProperSink.sol";
 
 contract DeployProperSink is Script {
@@ -12,7 +11,6 @@ contract DeployProperSink is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // Deploy UnstakeV2Test contract
         ProperSink properSink = new ProperSink();
 
         console.log("Deployed ProperSink at:", address(properSink));

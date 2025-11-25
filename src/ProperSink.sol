@@ -45,31 +45,35 @@ contract ProperSink {
         require(success, "addStake call failed");
     }
 
-
-    function removeStakeAndBurn(
-        bytes32 hotkey,
+    function removeStakeAndBurnBatch(
+        bytes32[] calldata hotkeys,
         uint256 netuid,
-        uint256 amount
+        uint256[] calldata amounts
     ) external onlyOwner {
 
-        uint256 balanceBefore = address(this).balance;
+        require(hotkeys.length == amounts.length, "Length mismatch");
 
-        bytes memory data = abi.encodeWithSelector(
-            Staking.removeStake.selector,
-            hotkey,
-            amount,
-            netuid
-        );
-        (bool success, ) = STAKING_PRECOMPILE.call{gas: gasleft()}(data);
-        require(success, "removeStake call failed");
+        for (uint256 i = 0; i < hotkeys.length; i++) {
+            uint256 balanceBefore = address(this).balance;
 
-        uint256 balanceAfter = address(this).balance;
+            bytes memory data = abi.encodeWithSelector(
+                Staking.removeStake.selector,
+                hotkeys[i],
+                amounts[i],
+                netuid
+            );
 
-        uint256 receivedTao = balanceAfter - balanceBefore;
+            (bool success, ) = STAKING_PRECOMPILE.call{gas: gasleft()}(data);
+            require(success, "removeStake call failed");
 
-        if (receivedTao > 0) {
-            (bool b,) = payable(BURN_ADDRESS).call{value: receivedTao}("");
-            require(b, "Burn failed");
+            uint256 balanceAfter = address(this).balance;
+            uint256 receivedTao = balanceAfter - balanceBefore;
+
+            if (receivedTao > 0) {
+                (bool b, ) = payable(BURN_ADDRESS).call{value: receivedTao}("");
+                require(b, "Burn failed");
+            }
         }
     }
+
 }
