@@ -1,65 +1,65 @@
-import json
-import subprocess
-import sys
+#!/usr/bin/env python3
+"""
+CLI tool to fetch and display stake info for a given Coldkey.
+Uses the shared utils.staking_manager logic.
+"""
+
 import argparse
-from ss58_to_pub32 import ss58_to_pub32
+import sys
+from pathlib import Path
 
-# Parse command-line arguments
-parser = argparse.ArgumentParser(description="Fetch stake info and optionally unstake/burn.")
-parser.add_argument("--coldkey", required=True, help="Coldkey SS58 address")
-parser.add_argument("--netuid", type=int, required=True, help="Network UID")
-parser.add_argument("--rpc-url", required=True, help="RPC URL")
-parser.add_argument("--private-key", required=True, help="Private key for signing transactions")
-args = parser.parse_args()
+# Add parent directory to sys.path to allow imports from utils package
+current_dir = Path(__file__).resolve().parent
+if str(current_dir) not in sys.path:
+    sys.path.append(str(current_dir))
 
-COLDKEY = args.coldkey
-NETUID = args.netuid
-RPC_URL = args.rpc_url
-PRIVATE_KEY = args.private_key
-
-# Fetch stake information
-cmd = [
-    "btcli", "stake", "list",
-    "--network", "test",
-    "--ss58", COLDKEY,
-    "--json-out"
-]
-
-result = subprocess.run(cmd, capture_output=True, text=True)
-if result.returncode != 0:
-    print("Error fetching stake info:", result.stderr)
+# Import shared logic
+try:
+    from utils.staking_manager import fetch_validator_stakes
+except ImportError as e:
+    print(f"CRITICAL ERROR: Could not import utils. Ensure 'tools/utils/__init__.py' exists. {e}", file=sys.stderr)
     sys.exit(1)
 
-# Handle empty stdout
-if not result.stdout.strip():
-    hotkeys = []
-    amounts = []
-    pub32_list = []
-else:
+def main():
+    parser = argparse.ArgumentParser(description="Fetch stake info for a Coldkey.")
+    parser.add_argument("--coldkey", required=True, help="Coldkey SS58 address")
+    parser.add_argument("--netuid", type=int, required=True, help="Network UID (e.g., 285)")
+    parser.add_argument("--network", default="test", help="Bittensor network name (test, finney). Default: test")
+
+    # Optional compatibility arg (ignored)
+    parser.add_argument("--rpc-url", help="Ignored (for compatibility only)")
+
+    args = parser.parse_args()
+
     try:
-        data = json.loads(result.stdout)
-    except json.JSONDecodeError as e:
-        print("Failed to parse JSON:", e)
+        hotkeys_bytes32, amounts_tao = fetch_validator_stakes(
+            coldkey_ss58=args.coldkey,
+            netuid=args.netuid,
+            network=args.network
+        )
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    hotkeys = list(data.get("stake_info", {}).keys())
+    if not hotkeys_bytes32:
+        print(f"No stake found for {args.coldkey} on NetUID {args.netuid}.")
+        sys.exit(0)
 
-    # Calculate total stake for each hotkey and convert SS58 to pub32
-    amounts = []
-    pub32_list = []
-    for hk in hotkeys:
-        stake_entries = data.get("stake_info", {}).get(hk, [])
-        total_value = sum(entry.get("stake_value", 0) for entry in stake_entries)
-        amounts.append(total_value)
+    print("-" * 50)
+    print(f"FOUND STAKE DATA (NetUID: {args.netuid}, Network: {args.network})")
+    print("-" * 50)
 
-        # Convert SS58 to pub32
-        try:
-            pub32 = ss58_to_pub32(hk)
-        except ValueError as e:
-            print(f"Error converting {hk} to pub32: {e}")
-            pub32 = None
-        pub32_list.append(pub32)
+    for i, hk in enumerate(hotkeys_bytes32):
+        # Convert bytes32 to hex string for display
+        hk_hex = "0x" + hk.hex()
+        amount = amounts_tao[i]
+        print(f"Validator {i+1}:")
+        print(f"  Hotkey (Pub32): {hk_hex}")
+        print(f"  Stake (TAO):    {amount}")
+        print("-" * 50)
 
-print(f"Hotkeys (validators): {hotkeys}")
-print(f"Pub32 addresses: {pub32_list}")
-print(f"Amounts to unstake: {amounts}")
+    print(f"Total Validators: {len(hotkeys_bytes32)}")
+    print(f"Total Stake:      {sum(amounts_tao)} TAO")
+
+if __name__ == "__main__":
+    main()

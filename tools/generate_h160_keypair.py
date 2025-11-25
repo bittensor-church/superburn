@@ -1,60 +1,55 @@
 #!/usr/bin/env python3
+"""
+Generates a new H160 EVM keypair and calculates its SS58 equivalent.
+Uses the shared address_converter utility.
+"""
 import argparse
-import hashlib
 import json
 import os
 import secrets
 import sys
+from pathlib import Path
+
+# Add the tools directory to sys.path to allow imports from utils
+current_dir = Path(__file__).resolve().parent
+if str(current_dir) not in sys.path:
+    sys.path.append(str(current_dir))
 
 try:
     from eth_keys import keys
     from web3 import Web3
+    # Import the shared logic
+    from utils.address_converter import h160_to_ss58
 except ImportError as exc:
-    raise SystemExit("Install eth-keys and web3 (pip install eth-keys web3)") from exc
-
-BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-
-
-def b58encode(data: bytes) -> str:
-    num = int.from_bytes(data, "big")
-    encoded = ""
-    while num > 0:
-        num, rem = divmod(num, 58)
-        encoded = BASE58_ALPHABET[rem] + encoded
-    leading = 0
-    for byte in data:
-        if byte == 0:
-            leading += 1
-        else:
-            break
-    return "1" * leading + encoded
-
-
-def h160_to_ss58(address: str, ss58_format: int = 42) -> str:
-    addr_bytes = bytes.fromhex(address[2:])
-    prefixed = b"evm:" + addr_bytes
-    public_key = hashlib.blake2b(prefixed, digest_size=32).digest()
-    if ss58_format < 64:
-        prefix = bytes([ss58_format])
-    else:
-        ss58_format |= 0b01000000
-        prefix = bytes([ss58_format & 0xFF, (ss58_format >> 8) & 0xFF])
-    payload = prefix + public_key
-    checksum = hashlib.blake2b(b"SS58PRE" + payload, digest_size=64).digest()[:2]
-    return b58encode(payload + checksum)
+    print("CRITICAL ERROR: Missing dependencies.", file=sys.stderr)
+    print("Please run: pip install eth-keys web3", file=sys.stderr)
+    # Note: utils module import error will also be caught here if structure is wrong
+    raise SystemExit(1) from exc
 
 
 def generate_keypair():
+    """
+    Generates a random private key, derives the Ethereum address,
+    and calculates the Bittensor SS58 representation.
+    """
+    # 1. Generate random 32 bytes for private key
     priv_bytes = secrets.token_bytes(32)
     private_key = keys.PrivateKey(priv_bytes)
+
+    # 2. Derive public key and EVM address
     public_key = private_key.public_key
     address_bytes = public_key.to_canonical_address()
     checksum_address = Web3.to_checksum_address("0x" + address_bytes.hex())
+
+    # 3. Derive SS58 address using shared utility
+    # This ensures consistency across the entire project
+    ss58_address = h160_to_ss58(checksum_address)
+
     return {
         "private_key": "0x" + private_key.to_hex(),
         "public_key": "0x" + public_key.to_hex(),
-        "address": checksum_address,
-        "ss58": h160_to_ss58(checksum_address),
+        "address": checksum_address,     # EVM Address (H160)
+        "ss58": ss58_address,            # Bittensor Address (Coldkey)
     }
 
 
@@ -71,20 +66,19 @@ def main():
     )
     args = parser.parse_args()
 
-    try:
-        import eth_keys  # noqa: F401  # ensure dependency is installed
-    except ImportError as exc:
-        raise SystemExit("Install eth-keys (pip install eth-keys) to use this helper") from exc
-
+    # Generate the keys
     keypair = generate_keypair()
 
+    # Output handling
     if args.output:
         path = os.path.expanduser(args.output)
         if os.path.exists(path) and not args.force:
-            raise SystemExit(f"{path} already exists. Use --force to overwrite.")
+            print(f"Error: {path} already exists. Use --force to overwrite.", file=sys.stderr)
+            sys.exit(1)
+
         with open(path, "w") as f:
             json.dump(keypair, f, indent=2)
-        print(f"Wrote keypair to {path}")
+        print(f"Success: Wrote keypair to {path}")
     else:
         print(json.dumps(keypair, indent=2))
 
