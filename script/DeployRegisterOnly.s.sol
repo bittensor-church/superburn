@@ -14,8 +14,8 @@ contract DeployRegisterOnly is Script {
         console2.log("==== RegisterOnly Deployed ====");
         console2.log("Contract Address:", address(helper));
         console2.log("Neuron Precompile:", "0x0000000000000000000000000000000000000804");
-        console2.log("Function: registerNeuron(uint16 netuid, bytes32 hotkey)");
-        console2.log("Usage: call with msg.value equal to the desired burn amount.");
+        console2.log("Function: burnedRegisterNeuron(uint16 netuid, bytes32 hotkey, uint256 amountToBurn)");
+        console2.log("Usage: prefund contract balance, then call with amountToBurn; contract refunds leftovers.");
 
         vm.stopBroadcast();
         return helper;

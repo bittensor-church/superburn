@@ -26,7 +26,7 @@ The Sink contract provides a simple, trustless mechanism to burn staked TAO toke
 - **Event Logging**: Track all unstakes and burns with detailed events
 - **Neuron Registration Helpers**:
   - `Sink.registerNeuron` forwards `burnedRegister` calls (and funds) to the neuron precompile so the contract can self-register as a miner.
-  - `RegisterOnly.sol` exposes a standalone `burnedRegisterNeuron` helper for minimal deployments and debugging.
+  - `RegisterOnly.sol` exposes a standalone `burnedRegisterNeuron` helper that takes an explicit burn amount, forwards only that value from the contract balance to the precompile, and refunds the remaining balance back to the caller.
 
 ## Contract Architecture
 
@@ -70,7 +70,7 @@ contract Sink {
 
 - `deploy-testnet.sh` accepts a target parameter. Run `./deploy-testnet.sh Sink` (default) to deploy the burn contract or `./deploy-testnet.sh RegisterOnly` to deploy the minimal `RegisterOnly.sol` helper.
 - `tools/register_neuron.py` is the fully featured helper that decodes SS58 hotkeys to bytes32, loads the Sink ABI, and signs transactions using `PRIVATE_KEY`.
-- `tools/register_neuron_minimal.py` is a stripped-down variant for the `RegisterOnly` contract. It expects a raw `--hotkey-bytes32`, always estimates gas (falling back to 200,000 if estimation fails), and prints transaction status plus replayed revert info if the call fails.
+- `tools/register_neuron_minimal.py` is a stripped-down variant for the `RegisterOnly` contract. It pre-funds the helper contract via the balance-transfer precompile (auto-computing the contract’s SS58 mirror from its H160), then calls `burnedRegisterNeuron` with a specified burn amount (defaults to the prefund), and the contract refunds any leftover balance. It expects a raw `--hotkey-bytes32`, always estimates gas (falling back to 200,000 if estimation fails), and prints transaction status plus the emitted RegisterAttempt event.
 
 ## Installation
 
