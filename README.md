@@ -82,10 +82,12 @@ Burn target is `0x0000000000000000000000000000000000000000`.
 - Foundry is only needed if you plan to build or deploy the contract yourself; using the provided tooling does not require it. Install from https://getfoundry.sh/introduction/installation/.  
 - Example deploy (mainnet RPC):  
   ```bash
+  forge install foundry-rs/forge-std
   forge script script/Deploy.s.sol \
     --rpc-url "https://lite.chain.opentensor.ai" \
     --broadcast
   ```
+  Note the deployed contract address from the script output for your records.
 - Env vars:  
   - `PRIVATE_KEY` – signer for deploy/ops  
   - `BITTENSOR_RPC_URL` – mainnet RPC  
