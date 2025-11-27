@@ -2,7 +2,7 @@
 
 SuperBurn is a purpose-built smart contract for punishing fraudulent Bittensor subnets. It registers as a miner on target subnets so incentives can flow to it. Validators (the “burn police”) direct subnet incentives to the contract; anyone can then trigger a burn that drains the contract’s accumulated alpha, converts it to TAO, and burns it. Burns reimburse the caller for gas, so enforcement stays permissionless and cheap (only the registration fee needs to be covered).
 
-> **Status:** Deployed on mainnet. The contract H160 is `0x08e3eC9d3e9CD956234dad60f9b60e31993c35b8` and its SS58 is `5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3`. View it on `https://evm.taostats.io/address/0x08e3eC9d3e9CD956234dad60f9b60e31993c35b8` and check the contract balance on taostats via `https://taostats.io/account/5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3`. Registration/burn scripts are provided in `tools/`.
+> **Status:** Deployed on mainnet. The contract H160 is `0x08e3eC9d3e9CD956234dad60f9b60e31993c35b8` and its SS58 is `5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3`. View it on https://evm.taostats.io/address/0x08e3eC9d3e9CD956234dad60f9b60e31993c35b8 and check the contract balance on taostats via https://taostats.io/account/5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3. Registration/burn scripts are provided in `tools/`.
 
 ## Why SuperBurn?
 - Redirect and destroy rewards earned by malicious subnets, stopping TAO leakage to subnet owners.
@@ -113,5 +113,5 @@ Burn target is `0x0000000000000000000000000000000000000000`.
 - **Who can trigger a burn?** Anyone; the contract reimburses gas to keep it free.  
 - **Can someone keep the alpha or TAO?** No; `unstakeAndBurn` always routes unstaked TAO to the burn address.  
 - **What stops a malicious operator from resetting weights?** Only validator coordination—contract code cannot enforce weights.  
-- **How do I know how much alpha to burn?** Check the contract coldkey `5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3` on taostats via `https://taostats.io/account/5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3`; the burn script also reports totals before execution.  
+- **How do I know how much alpha to burn?** Check the contract coldkey `5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3` on taostats via https://taostats.io/account/5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3; the burn script also reports totals before execution.  
 - **Does this hurt honest subnets?** The mechanism is opt-in per subnet and only works where validators route weights to SuperBurn.
