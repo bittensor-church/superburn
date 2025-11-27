@@ -1,377 +1,117 @@
-# Sink - Bittensor Burn Contract
+# SuperBurn – Bittensor Burn Police Contract
 
-A minimal, trustless smart contract that permanently burns staked TAO tokens on the Bittensor network using precompiled contracts. **No owners, no admins, fully autonomous.**
+SuperBurn is a purpose-built smart contract for punishing fraudulent Bittensor subnets. It registers as a miner on target subnets so incentives can flow to it. Validators (the “burn police”) direct subnet incentives to the contract; anyone can then trigger a burn that drains the contract’s accumulated alpha, converts it to TAO, and burns it. Burns reimburse the caller for gas, so enforcement stays permissionless and cheap (only the registration fee needs to be covered).
 
-## Overview
+> **Status:** Deployed on mainnet. The contract H160 is `0x...` and its SS58 is `5...` (replace with real values when published). View it on `https://evm.taostats.io/address/0x...` and check the contract balance on taostats via `https://taostats.io/account/<coldkey>`. Registration/burn scripts are provided in `tools/`.
 
-The Sink contract provides a simple, trustless mechanism to burn staked TAO tokens on Bittensor. Anyone can call `burnAll()` to unstake and burn the contract's balance and receive gas reimbursement for their transaction costs.
-
-**Process:** Receive staked TAO → Unstake via precompile → Burn liquid TAO → Reimburse caller
+## Why SuperBurn?
+- Redirect and destroy rewards earned by malicious subnets, stopping TAO leakage to subnet owners.
+- Permissionless execution: any account can run the burn script; caller gas is reimbursed.
+- Minimal trust: no profit extraction pathway; incentives are dictated by validator weights.
 
 ## Design Principles
-
-- 🔓 **No administrative control** - No owners, no pause, no upgrades
-- 🤖 **Fully autonomous** - Anyone can trigger burns
-- 💰 **Incentivized execution** - Callers are reimbursed for gas costs
-- 🎯 **Minimal attack surface** - Single public function, no state variables
-- 🔒 **Immutable** - Once deployed, behavior cannot be changed
-
-## Features
-
-- **burnAll()**: Unstakes and burns all staked tokens held by the contract
-- **Two-step process**: Unstake staked TAO → Burn liquid TAO
-- **Gas Reimbursement**: Callers receive gas cost reimbursement
-- **Stateless**: No state variables (except constants)
-- **No receive() function**: Tokens must be force-sent (prevents accidental deposits)
-- **Event Logging**: Track all unstakes and burns with detailed events
-- **Neuron Registration Helpers**:
-  - `Sink.registerNeuron` forwards `burnedRegister` calls (and funds) to the neuron precompile so the contract can self-register as a miner.
-  - `RegisterOnly.sol` exposes a standalone `burnedRegisterNeuron` helper that takes an explicit burn amount, forwards only that value from the contract balance to the precompile, and refunds the remaining balance back to the caller.
-
-## Contract Architecture
-
-```solidity
-contract Sink {
-    // Constants
-    address private constant UNSTAKE_PRECOMPILE = 0x0000000000000000000000000000000000000801;
-    address private constant NEURON_PRECOMPILE = 0x0000000000000000000000000000000000000804;
-    uint256 private constant REIMBURSEMENT_BUFFER = 90000; // Gas units
-
-    // Single public function
-    function burnAll() external returns (bool);
-
-    // View functions
-    function getBalance() external view returns (uint256); // Returns staked balance
-    function estimateReimbursement() external view returns (uint256);
-
-    // Miner registration helper
-    function registerNeuron(uint16 netuid, bytes32 hotkey) external payable returns (bool);
-}
-```
-
-### Key Design Decisions
-
-**No receive() Function**
-- Prevents accidental deposits
-- Simpler interface (single entry point)
-- Tokens must be force-sent via selfdestruct or coinbase
-
-**Stateless Design**
-- No storage variables (lower gas costs)
-- No state to corrupt
-- Fully deterministic behavior
-
-**Gas Reimbursement**
-- Incentivizes anyone to call burnAll()
-- Formula: `gasReimbursement = (gasUsed + BUFFER) * tx.gasprice`
-- Buffer calibrated to ~100,000 gas units (covers unstake + burn operations)
-
-### Neuron Registration Utilities
-
-- `deploy-testnet.sh` accepts a target parameter. Run `./deploy-testnet.sh Sink` (default) to deploy the burn contract or `./deploy-testnet.sh RegisterOnly` to deploy the minimal `RegisterOnly.sol` helper.
-- `tools/register_neuron.py` is the fully featured helper that decodes SS58 hotkeys to bytes32, loads the Sink ABI, and signs transactions using `PRIVATE_KEY`.
-- `tools/register_neuron_minimal.py` is a stripped-down variant for the `RegisterOnly` contract. It pre-funds the helper contract via the balance-transfer precompile (auto-computing the contract’s SS58 mirror from its H160), then calls `burnedRegisterNeuron` with a specified burn amount (defaults to the prefund), and the contract refunds any leftover balance. It expects a raw `--hotkey-bytes32`, always estimates gas (falling back to 200,000 if estimation fails), and prints transaction status plus the emitted RegisterAttempt event.
-
-## Installation
-
-### Prerequisites
-
-- [Foundry](https://book.getfoundry.sh/getting-started/installation)
-
-### Setup
-
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd sink
-
-# Install dependencies
-forge install
-
-# Build the contract
-forge build
-
-# Run tests
-forge test
-
-# Run tests with gas reporting
-forge test --gas-report
-```
-
-## Testing
-
-The project includes **23 comprehensive tests** covering:
-
-- ✅ Unstaking functionality
-- ✅ Burning functionality
-- ✅ Gas reimbursement calculations
-- ✅ Error conditions (insufficient balance, unstake failure, burn failure)
-- ✅ No receive/fallback functions (rejects direct sends)
-- ✅ Forced send mechanisms
-- ✅ Stateless behavior verification
-- ✅ Fuzz testing with random amounts and gas prices
-- ✅ Integration workflows
-- ✅ Edge cases (zero balance, very small/large balances)
-
-```bash
-# Run all tests
-forge test
-
-# Run specific test
-forge test --match-test test_BurnAll_Success
-
-# Run with coverage
-forge coverage
-
-# Run with gas snapshot
-forge snapshot
-
-# Run with verbosity
-forge test -vvv
-```
-
-### Test Results
-
-All 22 tests passing:
-- Unstaking: ✅
-- Burning: ✅
-- Gas reimbursement: ✅
-- Error handling: ✅
-- No receive/fallback: ✅
-- Fuzz testing: ✅
-- Integration tests: ✅
-
-## Deployment
-
-### Environment Setup
-
-Create a `.env` file:
-
-```bash
-PRIVATE_KEY=<your-private-key>
-BITTENSOR_RPC_URL=<bittensor-rpc-endpoint>
-BITTENSOR_TESTNET_RPC_URL=<testnet-rpc-endpoint>
-```
-
-### Deploy to Bittensor
-
-```bash
-# Deploy to Bittensor testnet
-forge script script/Deploy.s.sol:Deploy \
-    --rpc-url $BITTENSOR_TESTNET_RPC_URL \
-    --broadcast
-
-# Deploy to Bittensor mainnet (after testing!)
-forge script script/Deploy.s.sol:Deploy \
-    --rpc-url $BITTENSOR_RPC_URL \
-    --broadcast \
-    --verify
-```
-
-### Deployment Checklist
-
-Before deploying to mainnet:
-
-- [ ] Verify the unstake precompile address (`0x0000000000000000000000000000000000000801`)
-- [ ] Test on Bittensor testnet
-- [ ] Verify unstake precompile functionality works as expected
-- [ ] Verify tokens sent to address(0) are permanently burned
-- [ ] Test gas reimbursement accuracy
-- [ ] Review all test results
-- [ ] Audit the contract (recommended)
-- [ ] Test forced send mechanisms
-
-## Usage
-
-### Funding the Contract
-
-Since the contract has no `receive()` function, tokens must be sent via:
-
-1. **Force send** (selfdestruct from another contract)
-2. **Coinbase transaction** (if contract address is miner/validator)
-3. **Pre-funding** (send funds before deployment to calculated address)
-
-Example force send:
-```solidity
-contract ForceSender {
-    function sendToSink(address payable sink) external payable {
-        selfdestruct(sink);
-    }
-}
-```
-
-### Triggering Burns
-
-Anyone can call `burnAll()` to burn the contract's balance and receive gas reimbursement:
-
-```bash
-# Burn all tokens (and get reimbursed)
-cast send <SINK_CONTRACT_ADDRESS> \
-    "burnAll()" \
-    --rpc-url $BITTENSOR_RPC_URL \
-    --private-key $PRIVATE_KEY
-```
-
-### Querying Contract State
-
-```bash
-# Get current balance
-cast call <SINK_CONTRACT_ADDRESS> "getBalance()" --rpc-url $BITTENSOR_RPC_URL
-
-# Estimate gas reimbursement
-cast call <SINK_CONTRACT_ADDRESS> "estimateReimbursement()" --rpc-url $BITTENSOR_RPC_URL
-```
+- 🔓 **No admin on burn path** – Burning is permissionless and there is no withdrawal path for TAO.
+- 🤖 **Validator-directed incentives** – Weights steer rewards; the contract itself cannot capture value.
+- 💰 **Gas-reimbursed enforcement** – Burn callers are reimbursed; only registration fees must be covered.
+- 🎯 **Minimal surface** – Core flows are registration + burn; staking helper is gated and mainly for testing.
+- 🔒 **Immutable deployment** – No upgrades planned once live.
 
 ## How It Works
+1) **Register as a miner:** SuperBurn self-registers on a target subnet (uses the `burnedRegisterNeuron` helper from `RegisterOnly.sol`).  
+2) **Weights set by validators:** Policing validators set weights so all subnet incentives flow to SuperBurn. (Weight-setting is off-chain governance; the contract is not enforcing it.)  
+3) **Alpha accrues:** Rewards accrue as alpha under the contract’s coldkey.  
+4) **Burn trigger:** Anyone runs `tools/unstake_and_burn.py`, which calls `unstakeAndBurn(...)` to unstake all alpha into TAO and immediately burn to `0x000...0000`.  
+5) **Gas reimbursement:** The contract repays the caller for gas, making the burn effectively free for the enforcer.
 
-### Burn Flow
+Effect on a fraudulent subnet: alpha price is nosediving, TAO is drained from its liquidity, and outflows dry up emissions; value shifts back to honest subnets.
 
-1. Contract holds staked TAO tokens (via forced send)
-2. Anyone calls `burnAll()`
-3. Contract calculates gas reimbursement: `(gasUsed + 90000) * tx.gasprice`
-4. **Contract calls unstake precompile** to convert staked TAO to liquid TAO
-5. Contract sends gas reimbursement to caller
-6. **Contract sends remaining liquid TAO to address(0)** to permanently burn tokens
-7. Event emitted with unstake amount, burn amount, and gas reimbursement
+## Contract Surface (SuperBurn.sol)
+- **Registration (core):** `burnedRegisterNeuron(netuid, hotkey)` forwards to the neuron precompile so the contract can self-register as a miner. This consumes the subnet registration fee and gas from the contract balance (not reimbursable).  
+- **Burning (core):** `unstakeAndBurn(hotkeys[], netuid, amounts[])` unstakes specified positions, converts alpha to TAO, reimburses the caller’s gas, then burns all TAO.  
+- **Staking (utility/testing):** `stake(hotkey, netuid, amount)` (owner-gated) can stake TAO to a hotkey; primarily for testing flows.  
+- **Receives TAO:** payable `receive()` to accept inflows (needed to fund registration fees and staking); no withdraw path.
 
-### Gas Reimbursement
+Burn target is `0x0000000000000000000000000000000000000000`.
 
-The contract reimburses callers for gas costs to incentivize burns:
+## Usage at a Glance
+1) **Prep**  
+   - `pip install -r requirements.txt` for tooling.  
+   - Need a fresh EVM wallet? Generate one with `python tools/generate_h160_keypair.py` and fund it by sending TAO to the SS58 it prints.  
+   - Export `PRIVATE_KEY` for tx signing.
+2) **Register SuperBurn as a miner (per subnet)**  
+   - Contract addresses: H160 `0x...`, SS58 `5...` (populate once published).  
+   - Generate a loose coldkey (will serve as the contract's hotkey): `btcli wallet new-coldkey` and capture its public key (e.g., from `~/.bittensor/wallets/<name>/coldkeypub.txt`). This coldkey becomes the registered hotkey tied to the SuperBurn coldkey, so incentives flow to the contract balance.  
+   - Check the registration fee: `btcli subnet show --netuid <subnet_id>`.  
+   - Ensure your caller EVM wallet has enough TAO: the register tool transfers TAO to the contract, pays the registration fee and gas, then sends back any leftover TAO.  
+   - Use the registration helper (instructions to follow with the target subnet details).
+3) **Validator weight-setting**  
+   - Validators set weights directing emissions to the SuperBurn hotkey. (Use `tools/set_weights.py` if desired; outside contract control.)
+4) **Monitor alpha**  
+   - Track the contract coldkey `XXX` on taostats via `https://taostats.io/account/<coldkey>` to see accrued alpha.
+5) **Burn**  
+   - Run `python tools/unstake_and_burn.py <contract> --netuid <subnet_id> --rpc-url https://lite.chain.opentensor.ai --private-key $PRIVATE_KEY`  
+   - The script fetches stake for the contract coldkey, calls `unstakeAndBurn`, and the contract reimburses gas while burning all TAO.
 
-```
-Example with 10 staked TAO:
-- Gas used so far: ~10,000 units
-- Reimbursement buffer: 90,000 units
-- Total gas estimate: 100,000 units
-- Gas price: 20 gwei
-- Reimbursement: 100,000 * 20 gwei = 0.002 TAO
-- Amount unstaked: 10 TAO
-- Amount burned: 10 - 0.002 = 9.998 TAO
-- Caller receives: 0.002 TAO (covers their gas cost)
-```
+### Registering the SuperBurn miner (example workflow)
+- Requirements: deployed contract address, a loose coldkey (public key) from `btcli new-coldkey`, and an RPC endpoint.  
+- Example:  
+  ```bash
+  python tools/register_neuron_minimal.py \
+    --netuid <subnet_id> \
+    --value-tao <enough tao for registration and gas fees> \
+    --rpc-url https://lite.chain.opentensor.ai \
+    --hotkey-bytes 0xNewColdkeyPublicKey \
+    0xContractsAddress
+  ```
+  `--hotkey-bytes` is the 32-byte public key of the coldkey that will serve as the registered hotkey on the subnet; the final positional argument is the contract address.
 
-## Security Considerations
+## Tooling
+- `tools/register_neuron_minimal.py` / `tools/register_neuron.py` – Register the SuperBurn miner.  
+- `tools/unstake_and_burn.py` – Fetch contract-owned stake and trigger the burn.  
+- `tools/get_all_validators_and_stake.py` – Inspect validator stake positions.  
+- `tools/generate_h160_keypair.py` – Key/address utility (backed by `tools/utils/address_converter.py`).  
+- `tools/set_weights.py` – Set validator weights (for validator operators).  
+- `tools/stake.py` – Manually stake TAO to a hotkey via the contract (utility/testing).  
 
-### Trustless Design
+## Deployment Notes
+- Mainnet address will be published here once ready.  
+- Scripts: `script/Deploy.s.sol` for SuperBurn, `script/DeployRegisterOnly.s.sol` for the registration helper.  
+- Foundry is only needed if you plan to build or deploy the contract yourself; using the provided tooling does not require it. Install from https://getfoundry.sh/introduction/installation/.  
+- Example deploy (mainnet RPC):  
+  ```bash
+  forge install foundry-rs/forge-std
+  forge script script/Deploy.s.sol \
+    --rpc-url "https://lite.chain.opentensor.ai" \
+    --broadcast
+  ```
+  Note the deployed contract address from the script output for your records.
+- Verify the deployed contract on taostats (so the source is visible and easily inspectable):  
+  ```bash
+  forge verify-contract 0xYourContractAddress src/SuperBurn.sol:SuperBurn \
+    --rpc-url "https://evm.taostats.io/api/eth-rpc" \
+    --verifier blockscout \
+    --verifier-url "https://evm.taostats.io/api/"
+  ```
+- Env vars:  
+  - `PRIVATE_KEY` – signer for deploy/ops  
+  - `BITTENSOR_RPC_URL` – mainnet RPC  
+  - `BITTENSOR_TESTNET_RPC_URL` – testnet RPC (if testing)  
+- Build/test:  
+  ```bash
+  forge build
+  forge test
+  ```
 
-- **No owner** - No single point of control
-- **No admin functions** - Cannot be paused or modified
-- **Stateless** - No storage to manipulate
-- **Immutable** - Behavior fixed at deployment
-
-### Audited Risks
-
-1. **Gas Price Manipulation**: Callers using high gas prices pay for it upfront (net zero gain)
-2. **Precompile Failure**: Function reverts, can be retried
-3. **Insufficient Balance**: Reverts if balance < gas reimbursement
-4. **Reentrancy**: No state to corrupt; uses checks-effects-interactions pattern
-5. **Front-running**: First transaction wins; no value extraction beyond gas
-
-### Invariants
-
-- Contract balance ≈ 0 after successful burn (may have dust)
-- Burned tokens are permanently destroyed
-- Caller is always reimbursed (≥ actual gas cost)
-
-### Recommendations
-
-- Test thoroughly on testnet before mainnet
-- Verify unstake precompile address for Bittensor
-- Verify tokens sent to address(0) are permanently burned on the network
-- Monitor contract events for unexpected behavior
-- Calibrate REIMBURSEMENT_BUFFER on testnet if needed
-
-## Gas Optimization
-
-The contract is optimized for minimal gas usage:
-
-- ✅ No state variables (no SSTORE/SLOAD)
-- ✅ Custom errors instead of require strings
-- ✅ Minimal computation
-- ✅ Efficient event emissions
-
-**Deployment cost**: ~460k gas
-**burnAll() cost**: ~45-50k gas (varies with precompile)
-
-## Events
-
-```solidity
-event Burned(
-    uint256 amountUnstaked,    // Amount of staked tokens unstaked
-    uint256 amountBurned,      // Amount of liquid tokens burned
-    uint256 gasReimbursement,  // Amount sent to caller
-    address indexed caller,     // Who triggered the burn
-    uint256 timestamp          // Block timestamp
-);
-```
-
-## Comparison with Original Design
-
-| Feature | Original | Simplified |
-|---------|----------|------------|
-| Owner | ✅ Yes | ❌ No |
-| Pause | ✅ Yes | ❌ No |
-| receive() | ✅ Yes | ❌ No |
-| State variables | 3 | 0 |
-| Functions | 7 | 3 |
-| Gas reimbursement | ❌ No | ✅ Yes |
-| Trustless | ⚠️ Partial | ✅ Full |
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass (`forge test`)
-5. Submit a pull request
-
-## License
-
-MIT
-
-## Important Warnings
-
-⚠️ **CRITICAL WARNINGS**
-
-- Burned tokens are **PERMANENTLY DESTROYED**
-- There is **NO RECOVERY MECHANISM**
-- Contract has **NO ADMIN OR OWNER**
-- Once deployed, **CANNOT BE MODIFIED**
-- Verify precompile address **BEFORE DEPLOYMENT**
-- **TEST ON TESTNET FIRST**
-
-## Resources
-
-- [Contract Specification](./BURN_CONTRACT_SPEC.md)
-- [Foundry Book](https://book.getfoundry.sh/)
-- [Bittensor Documentation](https://docs.bittensor.com/)
-- [Solidity Documentation](https://docs.soliditylang.org/)
+## Safety & Invariants
+- Burns are irreversible; all TAO reaching the burn step is destroyed.  
+- No withdrawal path; contract cannot surface TAO once staked or burned.  
+- Gas reimbursement should make burns economically neutral for the caller (verify with your RPC’s gas price).  
+- Weight-setting is external; ensure validator consensus before relying on the mechanism.  
+- Verify precompile addresses against the current Bittensor release before deployment.
 
 ## FAQ
-
-**Q: Why no receive() function?**
-A: Prevents accidental deposits and simplifies the interface. Tokens must be intentionally force-sent.
-
-**Q: Who can call burnAll()?**
-A: Anyone! The contract is fully permissionless.
-
-**Q: What if the burn fails?**
-A: The transaction reverts, and you can retry. No tokens are lost.
-
-**Q: How accurate is the gas reimbursement?**
-A: Very accurate. The REIMBURSEMENT_BUFFER is calibrated to cover actual gas costs with a small safety margin.
-
-**Q: Can the contract be paused or upgraded?**
-A: No. It's completely immutable and trustless.
-
-**Q: What happens if I send tokens directly?**
-A: The transaction will fail. You must use a forced send mechanism (like selfdestruct).
-
-## Contact
-
-For issues or questions, please open an issue on GitHub.
-- **Registration flow requirements**:
-  - The hotkey passed to `registerNeuron`/`burnedRegisterNeuron` must be a fresh 32-byte key (convert an SS58 using `tools/register_neuron.py` or generate one with `tools/generate_h160_keypair.py`). The contract assumes ownership of that hotkey; no other coldkey should be associated with it.
-  - The contract’s own address effectively acts as the coldkey, so it must hold enough TAO to cover the registration burn. You can top it up by converting the contract’s `0x` address to SS58 via `tools/h160_to_ss58.py` and sending TAO on-chain. Check the required burn amount via `btcli subnet show --netuid <id> --network <name>` (e.g., `btcli subnet show --netuid 285 --network test` on testnet).
+- **Who can trigger a burn?** Anyone; the contract reimburses gas to keep it free.  
+- **Can someone keep the alpha or TAO?** No; `unstakeAndBurn` always routes unstaked TAO to the burn address.  
+- **What stops a malicious operator from resetting weights?** Only validator coordination—contract code cannot enforce weights.  
+- **How do I know how much alpha to burn?** Check the contract coldkey `XXX` on taostats via `https://taostats.io/account/<coldkey>`; the burn script also reports totals before execution.  
+- **Does this hurt honest subnets?** The mechanism is opt-in per subnet and only works where validators route weights to SuperBurn.
