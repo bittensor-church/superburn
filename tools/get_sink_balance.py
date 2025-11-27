@@ -11,7 +11,7 @@ except ImportError as exc:
 
 
 def load_sink_abi() -> list:
-    artifact = pathlib.Path(__file__).parent.parent / "out" / "Sink.sol" / "Sink.json"
+    artifact = pathlib.Path(__file__).parent.parent / "out" / "SuperBurn.sol" / "SuperBurn.json"
     try:
         return json.loads(artifact.read_text())["abi"]
     except FileNotFoundError as exc:

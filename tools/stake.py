@@ -44,8 +44,8 @@ def main():
     # 2. Setup Web3 & Contract
     try:
         w3 = get_web3_provider(args.rpc_url)
-        # Path to the Foundry artifact: project_root/out/Sink.sol/Sink.json
-        artifact_path = current_dir.parent / "out" / "Sink.sol" / "Sink.json"
+        # Path to the Foundry artifact: project_root/out/SuperBurn.sol/Sink.json
+        artifact_path = current_dir.parent / "out" / "SuperBurn.sol" / "SuperBurn.json"
         contract = load_contract(w3, args.contract, artifact_path)
     except Exception as e:
         print(f"CRITICAL ERROR: {e}", file=sys.stderr)

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {Sink} from "../src/Sink.sol";
+import {SuperBurn} from "../src/SuperBurn.sol";
 
 contract DeploySink is Script {
     function run() external {
@@ -17,12 +17,15 @@ contract DeploySink is Script {
 
         // 4. Deploy the Sink contract
         // The msg.sender (deployerAddress) will be set as the 'owner' in the constructor
-        Sink sink = new Sink();
+        SuperBurn sink = new SuperBurn();
 
         vm.stopBroadcast();
 
         console.log("--------------------------------------------------");
         console.log("Sink contract deployed successfully at:", address(sink));
+        console.log("Neuron Precompile:", "0x0000000000000000000000000000000000000804");
+        console.log("Function: burnedRegisterNeuron(uint16 netuid, bytes32 hotkey, uint256 amountToBurn)");
+        console.log("Usage: prefund contract balance, then call with amountToBurn; contract refunds leftovers.");
         console.log("--------------------------------------------------");
     }
 }

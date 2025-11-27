@@ -80,7 +80,7 @@ def main():
 
     # 4. Load Contract
     try:
-        artifact_path = current_dir.parent / "out" / "Sink.sol" / "Sink.json"
+        artifact_path = current_dir.parent / "out" / "SuperBurn.sol" / "SuperBurn.json"
         contract = load_contract(w3, args.contract, artifact_path)
     except Exception as e:
         print(f"CRITICAL ERROR loading contract: {e}", file=sys.stderr)

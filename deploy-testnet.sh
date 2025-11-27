@@ -3,14 +3,11 @@
 # PRIVATE_KEY needs to be exported with 0x-prefixed private key
 
 export BITTENSOR_RPC_URL="https://test.chain.opentensor.ai"
-TARGET=${1:-Sink}
+TARGET=${1:-SuperBurn}
 
 case "$TARGET" in
-  Sink)
+  SuperBurn)
     SOL="Deploy.s.sol:Deploy"
-    ;;
-  RegisterOnly)
-    SOL="DeployRegisterOnly.s.sol:DeployRegisterOnly"
     ;;
   *)
     echo "Unknown target: $TARGET" >&2

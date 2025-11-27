@@ -46,8 +46,8 @@ def generate_keypair():
     ss58_address = h160_to_ss58(checksum_address)
 
     return {
-        "private_key": "0x" + private_key.to_hex(),
-        "public_key": "0x" + public_key.to_hex(),
+        "private_key": private_key.to_hex(),
+        "public_key": public_key.to_hex(),
         "address": checksum_address,     # EVM Address (H160)
         "ss58": ss58_address,            # Bittensor Address (Coldkey)
     }

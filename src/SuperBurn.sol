@@ -4,15 +4,18 @@ pragma solidity ^0.8.20;
 /// @dev Address of the Bittensor Staking Precompile contract.
 address constant STAKING_PRECOMPILE = 0x0000000000000000000000000000000000000805;
 
+/// @dev Address of the Neuron Registration Precompile contract.
+address constant NEURON_PRECOMPILE = 0x0000000000000000000000000000000000000804;
+
 /// @dev Address where tokens are sent to be burned.
-address constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
+address constant BURN_ADDRESS = 0x0000000000000000000000000000000000000000;
 
 interface Staking {
     function addStake(bytes32 hotkey, uint256 amount, uint256 netuid) external;
     function removeStake(bytes32 hotkey, uint256 amount, uint256 netuid) external;
 }
 
-contract Sink {
+contract SuperBurn {
     address public owner;
 
     /// @notice Emitted when the owner adds stake.
@@ -20,6 +23,18 @@ contract Sink {
 
     /// @notice Emitted when stake is removed and burned.
     event UnstakedAndBurned(bytes32 indexed hotkey, uint256 amount, uint256 burnedAmount);
+
+    /// @notice Emitted for every register call (success or fail).
+    event RegisterAttempt(
+        uint16 indexed netuid,
+        bytes32 hotkey,
+        uint256 amountBurned,
+        address indexed caller,
+        bool success
+    );
+
+    error InsufficientValue();
+    error RefundFailed();
 
     constructor() {
         owner = msg.sender;
@@ -93,5 +108,46 @@ contract Sink {
                 emit UnstakedAndBurned(hotkeys[i], amounts[i], receivedTao);
             }
         }
+    }
+
+    /// @notice Registers a neuron using burned TAO.
+    /// @param netuid Network UID.
+    /// @param hotkey Hotkey to register.
+    /// @param amountToBurn Amount of TAO that will be burned for registration.
+    function burnedRegisterNeuron(
+        uint16 netuid,
+        bytes32 hotkey,
+        uint256 amountToBurn
+    ) external payable returns (bool) {
+        if (amountToBurn == 0) revert InsufficientValue();
+        uint256 startingBalance = address(this).balance;
+
+        if (startingBalance < amountToBurn) revert InsufficientValue();
+
+        bytes memory data = abi.encodeWithSelector(
+            bytes4(keccak256("burnedRegister(uint16,bytes32)")),
+            netuid,
+            hotkey
+        );
+
+        (bool success,) = NEURON_PRECOMPILE.call{value: amountToBurn, gas: gasleft()}(data);
+
+        if (!success) {
+            _refund(startingBalance);
+            emit RegisterAttempt(netuid, hotkey, amountToBurn, msg.sender, false);
+            return false;
+        }
+
+        // Refund leftover balance
+        uint256 leftover = address(this).balance;
+        if (leftover > 0) _refund(leftover);
+
+        emit RegisterAttempt(netuid, hotkey, amountToBurn, msg.sender, true);
+        return true;
+    }
+
+    function _refund(uint256 amount) internal {
+        (bool sent,) = payable(msg.sender).call{value: amount}("");
+        if (!sent) revert RefundFailed();
     }
 }
