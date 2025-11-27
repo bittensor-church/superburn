@@ -18,9 +18,6 @@ interface Staking {
 contract SuperBurn {
     address public owner;
 
-    /// @notice Emitted when the owner adds stake.
-    event StakeAdded(bytes32 indexed hotkey, uint256 amount, uint256 netuid);
-
     /// @notice Emitted when stake is removed and burned.
     event UnstakedAndBurned(bytes32 indexed hotkey, uint256 amount, uint256 burnedAmount);
 
