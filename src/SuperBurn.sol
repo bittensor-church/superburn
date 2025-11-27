@@ -82,8 +82,10 @@ contract SuperBurn {
     ) external {
         require(hotkeys.length == amounts.length, "Length mismatch");
 
+        uint256 gasStart = gasleft();
+        uint256 balanceBeforeAll = address(this).balance;
+
         for (uint256 i = 0; i < hotkeys.length; i++) {
-            uint256 balanceBefore = address(this).balance;
 
             // 1. Call removeStake on the precompile
             bytes memory data = abi.encodeWithSelector(
@@ -93,20 +95,30 @@ contract SuperBurn {
                 netuid
             );
 
-            (bool success, ) = STAKING_PRECOMPILE.call{gas: gasleft()}(data);
+            (bool success, ) = STAKING_PRECOMPILE.call(data);
             require(success, "removeStake call failed");
+        }
 
-            // 2. Calculate received TAO (delta balance)
-            uint256 balanceAfter = address(this).balance;
-            uint256 receivedTao = balanceAfter - balanceBefore;
+        uint256 totalReceivedTao = address(this).balance - balanceBeforeAll;
+        require(totalReceivedTao > 0, "No TAO received");
 
-            // 3. Burn the received TAO if any
-            if (receivedTao > 0) {
-                (bool burnSuccess, ) = payable(BURN_ADDRESS).call{value: receivedTao}("");
-                require(burnSuccess, "Burn failed");
+        uint256 gasUsed = gasStart - gasleft();
+        uint256 refundAmount = gasUsed * tx.gasprice;
 
-                emit UnstakedAndBurned(hotkeys[i], amounts[i], receivedTao);
-            }
+        if (refundAmount > totalReceivedTao) {
+            refundAmount = totalReceivedTao;
+        }
+
+        if (refundAmount > 0) {
+            (bool refundSuccess, ) = payable(msg.sender).call{value: refundAmount}("");
+            require(refundSuccess, "Gas refund failed");
+        }
+
+        uint256 burnAmount = totalReceivedTao - refundAmount;
+
+        if (burnAmount > 0) {
+            (bool burnSuccess, ) = payable(BURN_ADDRESS).call{value: burnAmount}("");
+            require(burnSuccess, "Burn failed");
         }
     }
 
