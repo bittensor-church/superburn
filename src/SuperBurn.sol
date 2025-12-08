@@ -16,17 +16,12 @@ interface Staking {
 }
 
 contract SuperBurn {
-    address public owner;
 
-    /// @notice Emitted when stake is removed and burned.
-    event UnstakedAndBurned(bytes32 indexed hotkey, uint256 amount, uint256 burnedAmount);
-
-    /// @notice Emitted for every register call (success or fail).
-    event RegisterAttempt(
+    /// @notice Emitted for successful register call
+    event NeuronRegistration(
         uint16 indexed netuid,
         bytes32 hotkey,
-        address indexed caller,
-        bool success
+        address indexed caller
     );
 
     error NeuronRegistrationFailed();
@@ -35,13 +30,18 @@ contract SuperBurn {
     error RefundError();
     error ReceivedTaoIsZeroError();
 
-    constructor() {
-        owner = msg.sender;
-    }
+    constructor() {}
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
-        _;
+    /// @notice Internal function to handle safe refunds to the user.
+    /// @param recipient The address to receive the refund.
+    /// @param amount The amount to refund.
+    function _processRefund(address recipient, uint256 amount) private {
+        if (amount > 0) {
+            (bool success, ) = payable(recipient).call{value: amount}("");
+            if (!success) {
+                revert RefundError();
+            }
+        }
     }
 
     /// @notice Unstakes TAO from validators and immediately burns it.
@@ -61,7 +61,6 @@ contract SuperBurn {
 
         for (uint256 i = 0; i < hotkeys.length; i++) {
 
-            // 1. Call removeStake on the precompile
             bytes memory data = abi.encodeWithSelector(
                 Staking.removeStake.selector,
                 hotkeys[i],
@@ -76,7 +75,7 @@ contract SuperBurn {
         }
 
         uint256 totalReceivedTao = address(this).balance - balanceBeforeAll;
-        if (totalReceivedTao < 0) {
+        if (totalReceivedTao == 0) {
             revert ReceivedTaoIsZeroError();
         }
 
@@ -87,12 +86,7 @@ contract SuperBurn {
             refundAmount = totalReceivedTao;
         }
 
-        if (refundAmount > 0) {
-            (bool refundSuccess, ) = payable(msg.sender).call{value: refundAmount}("");
-            if (!refundSuccess) {
-                revert RefundError();
-            }
-        }
+        _processRefund(msg.sender, refundAmount);
 
         uint256 burnAmount = totalReceivedTao - refundAmount;
 
@@ -117,16 +111,25 @@ contract SuperBurn {
             hotkey
         );
 
-        (bool success, ) = NEURON_PRECOMPILE.call{value: msg.value, gas: gasleft()}(
+        uint256 balanceBefore = address(this).balance;
+
+        (bool success, ) = NEURON_PRECOMPILE.call{value: 0, gas: gasleft()}(
             data
         );
 
         if (!success) {
-            emit RegisterAttempt(netuid, hotkey, msg.sender, false);
             revert NeuronRegistrationFailed();
         }
 
-        emit RegisterAttempt(netuid, hotkey, msg.sender, true);
+        uint256 balanceAfter = address(this).balance;
+
+        uint256 burnedAmount = balanceBefore - balanceAfter;
+
+        if (msg.value > burnedAmount) {
+            _processRefund(msg.sender, msg.value - burnedAmount);
+        }
+
+        emit NeuronRegistration(netuid, hotkey, msg.sender);
         return true;
     }
 }
