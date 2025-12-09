@@ -26,9 +26,6 @@ def main():
     parser.add_argument("--netuid", type=int, required=True, help="Network UID (e.g., 285)")
     parser.add_argument("--network", default="test", help="Bittensor network name (test, finney). Default: test")
 
-    # Optional compatibility arg (ignored)
-    parser.add_argument("--rpc-url", help="Ignored (for compatibility only)")
-
     args = parser.parse_args()
 
     try:
