@@ -12,6 +12,7 @@ if str(current_dir) not in sys.path:
 
 from utils.contract_loader import get_web3_provider, load_contract
 
+
 def get_burn_cost_fallback(subtensor, netuid):
     try:
         return subtensor.get_subnet_burn_cost(netuid)
@@ -41,6 +42,22 @@ def get_burn_cost_fallback(subtensor, netuid):
         pass
 
     raise RuntimeError(f"Could not find Burn/Recycle cost for NetUID {netuid} in storage")
+
+
+def safe_cleanup(subtensor=None, w3=None):
+    """Force close Substrate and Web3 sessions to avoid hanging threads."""
+    try:
+        if subtensor and hasattr(subtensor, "substrate"):
+            subtensor.substrate.close()
+    except Exception:
+        pass
+
+    try:
+        if w3 and hasattr(w3.provider, "session"):
+            w3.provider.session.close()
+    except Exception:
+        pass
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -80,10 +97,12 @@ def main():
 
         if balance_wei == 0:
             print("\n[!] CRITICAL ERROR: Your wallet has 0 Balance.", file=sys.stderr)
+            safe_cleanup(subtensor, w3)
             sys.exit(1)
 
     except Exception as e:
         print(f"CRITICAL ERROR connecting to Web3: {e}", file=sys.stderr)
+        safe_cleanup(subtensor)
         sys.exit(1)
 
     burn_amount_wei = w3.to_wei(str(burn_cost_tao.tao), 'ether')
@@ -98,11 +117,13 @@ def main():
         print(f"\n[!] ERROR: Insufficient funds.")
         print(f"Have: {balance_eth}")
         print(f"Need: {burn_cost_tao.tao}")
+        safe_cleanup(subtensor, w3)
         sys.exit(1)
 
     confirm = input("\nDo you want to proceed? (y/N): ").strip().lower()
     if confirm != 'y':
         print("Aborted by user.")
+        safe_cleanup(subtensor, w3)
         sys.exit(0)
 
     try:
@@ -116,6 +137,7 @@ def main():
 
     except ValueError as e:
         print(f"CRITICAL ERROR: Invalid input data: {e}", file=sys.stderr)
+        safe_cleanup(subtensor, w3)
         sys.exit(1)
 
     try:
@@ -123,6 +145,7 @@ def main():
         contract = load_contract(w3, args.contract, artifact_path)
     except Exception as e:
         print(f"CRITICAL ERROR loading contract: {e}", file=sys.stderr)
+        safe_cleanup(subtensor, w3)
         sys.exit(1)
 
     fn = contract.functions.registerNeuron(args.netuid, hotkey_bytes32)
@@ -174,6 +197,7 @@ def main():
         print(f"Sent tx: {tx_hash.hex()}")
     except Exception as e:
         print(f"Transaction failed locally: {e}")
+        safe_cleanup(subtensor, w3)
         sys.exit(1)
 
     print("Waiting for receipt...")
@@ -192,6 +216,9 @@ def main():
             print(f"Revert Reason (Hex): {revert_data.hex()}")
         except Exception as e:
             print(f"Could not decode revert: {e}")
+
+    safe_cleanup(subtensor, w3)
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
