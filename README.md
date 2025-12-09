@@ -2,7 +2,7 @@
 
 SuperBurn is a purpose-built smart contract for punishing fraudulent Bittensor subnets. It registers as a miner on target subnets so incentives can flow to it. Validators (the “burn police”) direct subnet incentives to the contract; anyone can then trigger a burn that drains the contract’s accumulated alpha, converts it to TAO, and burns it. Burns reimburse the caller for gas, so enforcement stays permissionless and cheap (only the registration fee needs to be covered).
 
-> **Status:** Deployed on mainnet. The contract H160 is `0x08e3eC9d3e9CD956234dad60f9b60e31993c35b8` and its SS58 is `5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3`. View it on https://evm.taostats.io/address/0x08e3eC9d3e9CD956234dad60f9b60e31993c35b8 and check the contract balance on taostats via https://taostats.io/account/5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3. Registration/burn scripts are provided in `tools/`.
+> **Status:** Deployed on mainnet. The contract H160 is `0x2f47AfDE4e8CC372B8Edd794B3492b3479c260eE` and its SS58 is `5D7vUnt4TJ6M8aQbriZCMMkZ8sfYsSJJvRrVnhdWzkArVHDh`. View it on https://evm.taostats.io/address/0x2f47AfDE4e8CC372B8Edd794B3492b3479c260eE and check the contract balance on taostats via https://taostats.io/account/5D7vUnt4TJ6M8aQbriZCMMkZ8sfYsSJJvRrVnhdWzkArVHDh. Registration/burn scripts are provided in `tools/`.
 
 ## Why SuperBurn?
 - Redirect and destroy rewards earned by malicious subnets, stopping TAO leakage to subnet owners.
@@ -39,7 +39,7 @@ Burn target is `0x0000000000000000000000000000000000000000`.
    - Need a fresh EVM wallet? Generate one with `python tools/generate_h160_keypair.py` and fund it by sending TAO to the SS58 it prints.  
    - Export `PRIVATE_KEY` for tx signing.
 2) **Register SuperBurn as a miner (per subnet)**  
-   - Contract addresses: H160 `0x08e3eC9d3e9CD956234dad60f9b60e31993c35b8`, SS58 `5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3`.  
+   - Contract addresses: H160 `0x2f47AfDE4e8CC372B8Edd794B3492b3479c260eE`, SS58 `5D7vUnt4TJ6M8aQbriZCMMkZ8sfYsSJJvRrVnhdWzkArVHDh`.  
    - Generate a loose coldkey (will serve as the contract's hotkey): `btcli wallet new-coldkey` and capture its public key (e.g., from `~/.bittensor/wallets/<name>/coldkeypub.txt`). This coldkey becomes the registered hotkey tied to the SuperBurn coldkey, so incentives flow to the contract balance.  
    - Check the registration fee: `btcli subnet show --netuid <subnet_id>`.  
    - Ensure your caller EVM wallet has enough TAO: the register tool transfers TAO to the contract, pays the registration fee and gas, then sends back any leftover TAO.  
@@ -56,14 +56,13 @@ Burn target is `0x0000000000000000000000000000000000000000`.
 - Requirements: deployed contract address, a loose coldkey (public key) from `btcli new-coldkey`, and an RPC endpoint.  
 - Example:  
   ```bash
-  python tools/register_neuron_minimal.py \
+  python tools/register_neuron.py \
     --netuid <subnet_id> \
-    --value-tao <enough tao for registration and gas fees> \
-    --rpc-url https://lite.chain.opentensor.ai \
-    --hotkey-bytes 0xNewColdkeyPublicKey \
-    0x08e3eC9d3e9CD956234dad60f9b60e31993c35b8
+    --network finney \
+    --hotkey-pub 0xNewColdkeyPublicKey \
+    0x2f47AfDE4e8CC372B8Edd794B3492b3479c260eE
   ```
-  `--hotkey-bytes` is the 32-byte public key of the coldkey that will serve as the registered hotkey on the subnet; the final positional argument is the contract address.
+  `--hotkey-pub` is the 32-byte public key of the coldkey that will serve as the registered hotkey on the subnet; the final positional argument is the contract address.
 
 ## Tooling
 - `tools/register_neuron_minimal.py` / `tools/register_neuron.py` – Register the SuperBurn miner.  
@@ -113,5 +112,5 @@ Burn target is `0x0000000000000000000000000000000000000000`.
 - **Who can trigger a burn?** Anyone; the contract reimburses gas to keep it free.  
 - **Can someone keep the alpha or TAO?** No; `unstakeAndBurn` always routes unstaked TAO to the burn address.  
 - **What stops a malicious operator from resetting weights?** Only validator coordination—contract code cannot enforce weights.  
-- **How do I know how much alpha to burn?** Check the contract coldkey `5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3` on taostats via https://taostats.io/account/5HWWb2187ktdr3PZuF3Jf4fnfQPHh9g4mzcs9raz6CbfurE3; the burn script also reports totals before execution.  
+- **How do I know how much alpha to burn?** Check the contract coldkey `5D7vUnt4TJ6M8aQbriZCMMkZ8sfYsSJJvRrVnhdWzkArVHDh` on taostats via https://taostats.io/account/5D7vUnt4TJ6M8aQbriZCMMkZ8sfYsSJJvRrVnhdWzkArVHDh; the burn script also reports totals before execution.  
 - **Does this hurt honest subnets?** The mechanism is opt-in per subnet and only works where validators route weights to SuperBurn.
