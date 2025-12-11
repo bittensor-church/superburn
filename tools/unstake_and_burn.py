@@ -9,6 +9,7 @@ import os
 import sys
 import json
 from pathlib import Path
+import bittensor.utils
 
 # Add the tools directory to sys.path
 current_dir = Path(__file__).resolve().parent
@@ -23,12 +24,15 @@ def main():
     parser = argparse.ArgumentParser(description="Batch unstake and burn helper")
     parser.add_argument("contract", help="Sink contract address (EVM 0x...)")
     parser.add_argument("--netuid", required=True, type=int)
-    parser.add_argument("--network", default="test", help="Bittensor network (test/finney)")
-    parser.add_argument("--rpc-url", required=True)
+    parser.add_argument("--network", default="finney", help="Bittensor network (test/finney)")
     parser.add_argument("--private-key", default=None)
     # New argument to manually force gas price if RPC is crazy
     parser.add_argument("--force-gas-price-gwei", type=float, help="Force a specific Gas Price in Gwei (e.g., 100)")
     args = parser.parse_args()
+
+    _, rpc_url = bittensor.utils.determine_chain_endpoint_and_network(
+        args.network,
+    )
 
     private_key = args.private_key or os.getenv("PRIVATE_KEY")
     if not private_key:
@@ -36,7 +40,7 @@ def main():
 
     # 1. Setup Web3 & Account & Check Balance
     try:
-        w3 = get_web3_provider(args.rpc_url)
+        w3 = get_web3_provider(rpc_url)
         account = w3.eth.account.from_key(private_key)
         balance_wei = w3.eth.get_balance(account.address)
         balance_eth = w3.from_wei(balance_wei, 'ether')

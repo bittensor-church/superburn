@@ -9,6 +9,7 @@ import os
 import sys
 import json
 from pathlib import Path
+import bittensor.utils
 
 # Add the tools directory to sys.path to allow imports from utils
 current_dir = Path(__file__).resolve().parent
@@ -23,9 +24,13 @@ def main():
     parser.add_argument("--hotkey-bytes32", required=True, help="Hotkey as 32-byte hex string (0x...)")
     parser.add_argument("--netuid", required=True, type=int)
     parser.add_argument("--amount-tao", type=float, required=True, help="Amount of TAO to stake (e.g., 0.05)")
-    parser.add_argument("--rpc-url", required=True)
+    parser.add_argument("--network", default="test", help="Bittensor network (test/finney)")
     parser.add_argument("--private-key", default=None)
     args = parser.parse_args()
+
+    _, rpc_url = bittensor.utils.determine_chain_endpoint_and_network(
+        args.network,
+    )
 
     # 1. Validation
     private_key = args.private_key or os.getenv("PRIVATE_KEY")
@@ -43,7 +48,7 @@ def main():
 
     # 2. Setup Web3 & Contract
     try:
-        w3 = get_web3_provider(args.rpc_url)
+        w3 = get_web3_provider(rpc_url)
         # Path to the Foundry artifact: project_root/out/SuperBurn.sol/Sink.json
         artifact_path = current_dir.parent / "out" / "SuperBurn.sol" / "SuperBurn.json"
         contract = load_contract(w3, args.contract, artifact_path)

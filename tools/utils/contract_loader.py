@@ -5,7 +5,7 @@ from web3 import Web3
 
 def get_web3_provider(rpc_url: str) -> Web3:
     """Initializes and checks Web3 connection."""
-    w3 = Web3(Web3.HTTPProvider(rpc_url))
+    w3 = Web3(Web3.LegacyWebSocketProvider(rpc_url))
     if not w3.is_connected():
         raise ConnectionError(f"Failed to connect to RPC URL: {rpc_url}")
     return w3

@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 import bittensor as bt
+import bittensor.utils
 
 current_dir = Path(__file__).resolve().parent
 if str(current_dir) not in sys.path:
@@ -63,12 +64,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("contract")
     parser.add_argument("--netuid", required=True, type=int)
-    parser.add_argument("--hotkey", required=True)
-    parser.add_argument("--rpc-url", required=True)
+    parser.add_argument("--hotkey-pub", dest="hotkey_pub", required=True, help="Hotkey public key (bytes32 hex, 0x...)")
     parser.add_argument("--private-key", default=None)
-    parser.add_argument("--network", default="test")
+    parser.add_argument("--network", default="finney")
     parser.add_argument("--force-gas-price-gwei", type=float)
     args = parser.parse_args()
+
+    _, rpc_url = bittensor.utils.determine_chain_endpoint_and_network(
+        args.network,
+    )
 
     private_key = args.private_key or os.getenv("PRIVATE_KEY")
     if not private_key:
@@ -86,7 +90,7 @@ def main():
         sys.exit(1)
 
     try:
-        w3 = get_web3_provider(args.rpc_url)
+        w3 = get_web3_provider(rpc_url)
         account = w3.eth.account.from_key(private_key)
         balance_wei = w3.eth.get_balance(account.address)
         balance_eth = w3.from_wei(balance_wei, 'ether')
@@ -110,7 +114,7 @@ def main():
     print(f"\n--- CONFIRMATION ---")
     print(f"Operation: Register Neuron on NetUID {args.netuid}")
     print(f"Contract:  {args.contract}")
-    print(f"Hotkey:    {args.hotkey}")
+    print(f"Hotkey:    {args.hotkey_pub}")
     print(f"Cost:      {burn_cost_tao.tao} TAO")
 
     if balance_wei < burn_amount_wei:
@@ -127,10 +131,10 @@ def main():
         sys.exit(0)
 
     try:
-        if args.hotkey.startswith("0x"):
-            hotkey_bytes32 = bytes.fromhex(args.hotkey[2:])
+        if args.hotkey_pub.startswith("0x"):
+            hotkey_bytes32 = bytes.fromhex(args.hotkey_pub[2:])
         else:
-            hotkey_bytes32 = bytes.fromhex(args.hotkey)
+            hotkey_bytes32 = bytes.fromhex(args.hotkey_pub)
 
         if len(hotkey_bytes32) != 32:
             raise ValueError(f"Hotkey must be 32 bytes, got {len(hotkey_bytes32)}")
@@ -201,7 +205,7 @@ def main():
         sys.exit(1)
 
     print("Waiting for receipt...")
-    receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300, poll_latency=2)
 
     if receipt["status"] == 1:
         print(f"SUCCESS! Block: {receipt['blockNumber']}, Gas Used: {receipt['gasUsed']}")
